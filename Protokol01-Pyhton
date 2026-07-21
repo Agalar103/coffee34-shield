@@ -1,0 +1,93 @@
+import time
+import collections
+
+# Trafik İzleyici
+class TrafficMonitor:
+    def __init__(self, limit=100, window=60):
+        self.limit = limit
+        self.window = window
+        self.requests = collections.deque()
+
+    def add_request(self, ip_address):
+        current_time = time.time()
+        self.requests.append((current_time, ip_address))
+        self.cleanup(current_time)
+
+    def cleanup(self, current_time):
+        while self.requests and self.requests[0][0] < current_time - self.window:
+            self.requests.popleft()
+
+# Hız Sınırlayıcı
+class RateLimiter:
+    def __init__(self, limit=10, window=60):
+        self.limit = limit
+        self.window = window
+        self.ip_requests = collections.defaultdict(list)
+
+    def check_limit(self, ip_address):
+        current_time = time.time()
+        self.ip_requests[ip_address] = [
+            t for t in self.ip_requests[ip_address] if t > current_time - self.window
+        ]
+        if len(self.ip_requests[ip_address]) < self.limit:
+            self.ip_requests[ip_address].append(current_time)
+            return True
+        else:
+            return False
+
+# Bağlantı İzleyici
+class ConnectionMonitor:
+    def __init__(self, limit=10):
+        self.limit = limit
+        self.connections = 0
+
+    def add_connection(self):
+        if self.connections < self.limit:
+            self.connections += 1
+            return True
+        else:
+            return False
+
+    def remove_connection(self):
+        self.connections -= 1
+
+# Kalkan
+class Shield:
+    def __init__(self):
+        self.traffic_monitor = TrafficMonitor()
+        self.rate_limiter = RateLimiter()
+        self.connection_monitor = ConnectionMonitor()
+
+    def process_request(self, ip_address):
+        self.traffic_monitor.add_request(ip_address)
+        if not self.rate_limiter.check_limit(ip_address):
+            return "Block"
+        if not self.connection_monitor.add_connection():
+            return "Block"
+        # Analiz ve Karar Mekanizması (Geliştirilebilir)
+        # ...
+        return "Allow"
+
+    def process_connection_end(self):
+        self.connection_monitor.remove_connection()
+
+# Kullanım Örneği
+shield = Shield()
+
+# İstekleri işle
+print(shield.process_request("192.168.1.1")) # İzin Ver
+print(shield.process_request("192.168.1.1")) # İzin Ver
+print(shield.process_request("192.168.1.2")) # İzin Ver
+
+# Hız sınırını aşan bir istek
+print(shield.process_request("192.168.1.1")) # İzin Ver (Limit henüz aşılmadı)
+# ... (Limit aşılana kadar devam eder)
+print(shield.process_request("192.168.1.1")) # Engelle (Hız sınırı aşıldı)
+
+# Bağlantı sınırını aşan bir istek
+# ... (Bağlantı sınırı aşılana kadar devam eder)
+print(shield.process_request("192.168.1.3")) # Engelle (Bağlantı sınırı aşıldı)
+
+# Bağlantı sona erdiğinde bağlantı sayısını azalt
+shield.process_connection_end()
+print(shield.process_request("192.168.1.3")) # İzin Ver (Yeni bağlantı yapılabilir)
